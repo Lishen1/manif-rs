@@ -1,5 +1,5 @@
-use nalgebra::{UnitQuaternion, Vector3};
-use nalgebra_lie::{LieGroupBase, TangentBase};
+use crate::{LieGroupBase, TangentBase};
+use nalgebra::Vector3;
 
 fn main() {
     let tangent = Vector3::new(0.0, 0.0, 0.1);
@@ -8,8 +8,6 @@ fn main() {
     println!("so3 {:?}", so3);
     let so3 = tangent.exp_map();
     println!("so3 {:?}", so3);
-    // let dim = <UnitQuaternion<f64> as LieGroup<f64, 2, 3, 4>>::DIM;
-    // println!("dim {}", dim);
     let t = so3.log_map();
     println!("t {}", t);
 

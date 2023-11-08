@@ -1,127 +1,432 @@
-use nalgebra::{ArrayStorage, DMatrixViewMut, Matrix, Matrix3x6, RealField, UnitQuaternion};
-use nalgebra::{Const, Vector3};
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use nalgebra::RealField;
+
+pub trait MakeIdentity<T: RealField> {
+    fn make_identity() -> Self;
 }
 
-#[allow(non_snake_case)]
-pub trait LieGroupBase {
-    const DIM: usize;
-    const DOF: usize;
-    const REP_SIZE: usize;
-    type T: RealField;
-    // type LieGroup: LieGroup<R>;
-    // type Jacobian =
-    //     Matrix<R, Const<Self::DOF>, Const<Self::DOF>, ArrayStorage<R, Self::DOF, Self::DOF>>;
-    // type OptJacobianRef = Option<DMatrixViewMut<>>
-
-    type Jacobian;
-    type Tangent: TangentBase;
-    // type Tangent;
-    fn log_map_j(&self, J_t_m: Option<&mut Self::Jacobian>) -> Self::Tangent;
-    fn log_map(&self) -> Self::Tangent {
-        self.log_map_j(None)
-    }
-    // fn rplus_j<TN: TangentBase>(
-    //     &self,
-    //     t: TN,
-    //     J_mout_m: Option<&mut Self::Jacobian>,
-    //     J_mout_t: Option<&mut Self::Jacobian>,
-    // ) -> TN::Derived {
-    //     t.exp_map()
-    // }
-
-    fn compose(
-        &self,
-        m: Self,
-        J_mc_ma: Option<&mut Self::Jacobian>,
-        J_mc_mb: Option<&mut Self::Jacobian>,
-    ) -> impl LieGroupBase;
-    fn rplus_j(
-        &self,
-        t: Self::Tangent,
-        J_mout_m: Option<&mut Self::Jacobian>,
-        J_mout_t: Option<&mut Self::Jacobian>,
-    ) -> Self
-    where
-        Self: Sized,
-    {
-        if let Some(J_mount_t) = J_mout_t {
-            todo!();
-            // J_mount_t = t.rjac();
-        }
-        self.compose(t.exp_map(), J_mout_m, None)
-        // self.compose(*self, J_mout_m, None)
-        // t.exp_map().compose(self, None, None)
-    }
-}
-
-#[allow(non_snake_case)]
-pub trait TangentBase {
-    type T: RealField;
-    type Derived: LieGroupBase;
-    type Jacobian;
-    fn exp_map_j(&self, J_m_t: Option<&mut Self::Jacobian>) -> Self::Derived;
-    fn exp_map(&self) -> Self::Derived {
-        self.exp_map_j(None)
-    }
-}
-
-///////////// impl /////////////////////////////////////
-
-#[allow(non_snake_case)]
-impl<T: RealField> LieGroupBase for UnitQuaternion<T> {
-    // NOTE: size related constants should not be a generic parameters
-    // but no way do it now in rust
-    const DIM: usize = 3;
-    const DOF: usize = 3;
-    const REP_SIZE: usize = 4;
-
-    type T = T;
-    // type Jacobian = Matrix<
-    //     T,
-    //     Const<{ Self::DOF }>,
-    //     Const<{ Self::DOF }>,
-    //     ArrayStorage<T, { Self::DOF }, { Self::DOF }>,
-    // >;
-    type Jacobian = Matrix<T, Const<3>, Const<3>, ArrayStorage<T, 3, 3>>;
-    type Tangent = Vector3<T>;
-
-    fn log_map_j(&self, J_t_m: Option<&mut Self::Jacobian>) -> Self::Tangent {
-        todo!()
-    }
-
-    fn compose(
-        &self,
-        m: Self,
-        J_mc_ma: Option<&mut Self::Jacobian>,
-        J_mc_mb: Option<&mut Self::Jacobian>,
-    ) -> Self {
-        self * m
-    }
-}
-
-#[allow(non_snake_case)]
-impl<T: RealField> TangentBase for Vector3<T> {
-    type T = T;
-    type Derived = UnitQuaternion<T>;
-    type Jacobian = <UnitQuaternion<T> as LieGroupBase>::Jacobian;
-
-    fn exp_map_j(&self, J_m_t: Option<&mut Self::Jacobian>) -> Self::Derived {
-        let j = Self::Jacobian::identity();
-        Self::Derived::identity()
-    }
-}
+pub mod lie_group_base;
+pub mod so3;
+pub mod tangent_base;
+pub use lie_group_base::LieGroupBase;
+pub use tangent_base::TangentBase;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{lie_group_base::LieGroupBase, tangent_base::TangentBase};
+    use matrixcompare::assert_matrix_eq;
+    use nalgebra::{UnitQuaternion, Vector3};
+    use rand::Rng;
+    ///////////////////////////////////
+    fn get_w() -> Vector3<f64> {
+        Vector3::<f64>::from_fn(|_, _| rand::thread_rng().gen_range(-1.0..1.0) * 1e-2)
+    }
+
+    struct TestData {
+        state: UnitQuaternion<f64>,
+        state_other: UnitQuaternion<f64>,
+        delta: Vector3<f64>,
+        delta_other: Vector3<f64>,
+    }
+    impl TestData {
+        const CASES: usize = 2;
+        fn test_case(case: usize) -> TestData {
+            match case {
+                0 => TestData {
+                    state: UnitQuaternion::identity(),
+                    state_other: UnitQuaternion::identity(),
+                    delta: Vector3::zeros(),
+                    delta_other: Vector3::zeros(),
+                },
+                1 => TestData {
+                    state: Vector3::<f64>::from_fn(|_, _| {
+                        rand::thread_rng().gen_range(-1.0..1.0) * 1e-8
+                    })
+                    .exp_map(),
+                    state_other: Vector3::<f64>::from_fn(|_, _| {
+                        rand::thread_rng().gen_range(-1.0..1.0) * 1e-8
+                    })
+                    .exp_map(),
+                    delta: Vector3::<f64>::from_fn(|_, _| {
+                        rand::thread_rng().gen_range(-1.0..1.0) * 1e-8
+                    }),
+                    delta_other: Vector3::<f64>::from_fn(|_, _| {
+                        rand::thread_rng().gen_range(-1.0..1.0) * 1e-8
+                    }),
+                },
+                _ => panic!(),
+            }
+        }
+    }
+    const MANIF_TOL: f64 = 1e-5;
+    const MANIF_NEAR_TOL: f64 = 1e-4;
+    const MAT_NEAR_TOL: f64 = 1e-8;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-        // let tangent = Vector3::<f64>::new(0.1, 0.3, 0.1);
-        // let so3 = tangent.exp_map_j();
+    fn eval_inverse_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let state = case.state;
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.inverse_j(Some(&mut j_out_lhs));
+            let state_pert = state.plus(w.clone()).inverse();
+            let state_lin = state_out.rplus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            )
+        }
+    }
+    #[test]
+    fn eval_lift_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let state = case.state;
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.log_map_j(Some(&mut j_out_lhs));
+            let state_pert = state.plus(w.clone()).log_map();
+            let state_lin = state_out + j_out_lhs * w;
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL)
+        }
+    }
+    #[test]
+    fn eval_exp_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let delta = case.delta;
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = delta.exp_map_j(Some(&mut j_out_lhs));
+            let state_pert = (delta + w).exp_map();
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_compose_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out =
+                state.compose_j(state_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w).compose(state_other);
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+            let state_pert = state.compose(state_other.plus(w));
+            let state_lin = state_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_between_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out =
+                state.between_j(state_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).between(state_other);
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+            let state_pert = state.between(state_other.plus(w));
+            let state_lin = state_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_rplus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let delta = case.delta;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.rplus_j(delta, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).rplus(delta);
+            let state_lin = state_out.rplus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+            let state_pert = state.rplus(delta + w);
+            let state_lin = state_out.rplus(j_out_rhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_lplus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let delta = case.delta;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.lplus_j(delta, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).lplus(delta);
+            let state_lin = state_out.rplus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+            let state_pert = state.lplus(delta + w);
+            let state_lin = state_out.rplus(j_out_rhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_plus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let delta = case.delta;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.plus_j(delta, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).plus(delta);
+            let state_lin = state_out.rplus(j_out_lhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+            let state_pert = state.plus(delta + w);
+            let state_lin = state_out.rplus(j_out_rhs * w);
+            assert_matrix_eq!(
+                state_pert.coords,
+                state_lin.coords,
+                comp = abs,
+                tol = MANIF_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_rminus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.rminus_j(state_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).rminus(state_other);
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+            let state_pert = state.rminus(state_other.plus(w));
+            let state_lin = state_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+        }
+    }
+    #[test]
+    fn eval_lminus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.lminus_j(state_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+
+            let state_pert = state.plus(w.clone()).lminus(state_other);
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+
+            let state_pert = state.lminus(state_other.plus(w));
+            let state_lin = state_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+        }
+    }
+    #[test]
+    fn eval_minus_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let w = get_w();
+            let state_out = state.minus_j(state_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+            let state_pert = state.plus(w.clone()).minus(state_other);
+            let state_lin = state_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+            let state_pert = state.minus(state_other.plus(w));
+            let state_lin = state_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(state_pert, state_lin, comp = abs, tol = MANIF_NEAR_TOL);
+        }
+    }
+    #[test]
+    fn eval_adj() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let state_other = case.state_other;
+            let delta = case.delta;
+
+            let adj_a = state.adj();
+            let adj_b = state_other.adj();
+            let adj_c = state.compose(state_other).adj();
+
+            assert_matrix_eq!(adj_a * adj_b, adj_c, comp = abs, tol = 1e-8);
+            assert_matrix_eq!(
+                state.plus(delta).coords,
+                state.plus(state.adj() * delta).coords,
+                comp = abs,
+                tol = MANIF_TOL
+            );
+            assert_matrix_eq!(
+                state.adj().try_inverse().unwrap(),
+                state.inverse().adj(),
+                comp = abs,
+                tol = MAT_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_adj_jl_jr() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let tan = state.log_map();
+            let adj = state.adj();
+
+            let jr = tan.rjac();
+            let jl = tan.ljac();
+            assert_matrix_eq!(jl, (-tan).rjac());
+            assert_matrix_eq!(jl, adj.clone() * jr, comp = abs, tol = MAT_NEAR_TOL);
+            assert_matrix_eq!(
+                adj,
+                jl * jr.try_inverse().unwrap(),
+                comp = abs,
+                tol = MAT_NEAR_TOL
+            );
+        }
+    }
+    #[test]
+    fn eval_jr_jrinv_jl_jlinv() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+
+            let state = case.state;
+            let tan = state.log_map();
+            let jr = tan.rjac();
+            let jl = tan.ljac();
+            let jrinv = tan.rjacinv();
+            let jlinv = tan.ljacinv();
+
+            let eye = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::identity();
+            assert_matrix_eq!(eye, jr * jrinv, comp = abs, tol = MAT_NEAR_TOL);
+            assert_matrix_eq!(eye, jl * jlinv, comp = abs, tol = MAT_NEAR_TOL);
+        }
+    }
+    #[test]
+    fn eval_tan_plus_tan_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let delta = case.delta;
+            let delta_other = case.delta_other;
+            let w = get_w();
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let delta_out = delta.plus_j(delta_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+
+            let delta_pert = (delta + w).plus(delta_other);
+            let delta_lin = delta_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+
+            let delta_pert = delta.plus(delta_other + w);
+            let delta_lin = delta_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+        }
+    }
+    #[test]
+    fn eval_tan_minus_tan_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let delta = case.delta;
+            let delta_other = case.delta_other;
+            let w = get_w();
+            let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_out_rhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let delta_out = delta.minus_j(delta_other, Some(&mut j_out_lhs), Some(&mut j_out_rhs));
+
+            let delta_pert = (delta + w).minus(delta_other);
+            let delta_lin = delta_out.plus(j_out_lhs * w);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+
+            let delta_pert = delta.minus(delta_other + w);
+            let delta_lin = delta_out.plus(j_out_rhs * w);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+        }
     }
 }
