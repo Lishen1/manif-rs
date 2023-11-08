@@ -1,4 +1,4 @@
-use crate::{LieGroupBase, TangentBase};
+use manif::{LieGroupBase, TangentBase};
 use nalgebra::Vector3;
 
 fn main() {
