@@ -5,7 +5,7 @@ use nalgebra::{
 };
 use nalgebra::{Const, Vector3};
 
-use crate::{lie_group_base::LieGroupBase, tangent_base::TangentBase, MakeIdentity};
+pub use crate::{lie_group_base::LieGroupBase, tangent_base::TangentBase, MakeIdentity};
 
 impl<T: RealField> MakeIdentity<T> for Matrix<T, Const<3>, Const<3>, ArrayStorage<T, 3, 3>> {
     fn make_identity() -> Self {
