@@ -22,8 +22,8 @@ Unofficial partial port of [manif]
 | Act on vector | $\mathbf{\mathcal{X}}\circ\mathbf v$ | `X.act(v)` |
 | Retract to group element | $\exp(\mathbf\varphi^\wedge)$ | `w.exp()` |
 | Lift to tangent space | $\log(\mathbf{\mathcal{X}})^\vee$ | `X.log()` |
-| Manifold Adjoint | $\operatorname{Adj}(\mathbf{\mathcal{X}})$ | `X.adj()` |
-| Tangent adjoint | $\operatorname{adj}(\mathbf{\varphi^\wedge})$ | `w.smallAdj()` |
+| Manifold Adjoint | $\text{Adj}(\mathbf{\mathcal{X}})$ | `X.adj()` |
+| Tangent adjoint | $\text{adj}(\mathbf{\varphi^\wedge})$ | `w.smallAdj()` |
 |       |   Composed Operation   |  |
 | Manifold right plus | $\mathbf{\mathcal{X}}\oplus\mathbf\varphi = \mathbf{\mathcal{X}}\circ\exp(\mathbf\varphi^\wedge)$ | `X + w`<br/>`X.plus(w)`<br/>`X.rplus(w)` |
 | Manifold left plus | $\mathbf{\mathbf\varphi\oplus\mathcal{X}} = \exp(\mathbf\varphi^\wedge)\circ\mathbf{\mathcal{X}}$ | `w + X`<br/>`w.plus(X)`<br/>`w.lplus(X)` |
