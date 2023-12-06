@@ -1,9 +1,3 @@
-use nalgebra::RealField;
-
-pub trait MakeIdentity<T: RealField> {
-    fn make_identity() -> Self;
-}
-
 pub mod lie_group_base;
 pub mod so3;
 pub mod tangent_base;
@@ -68,7 +62,7 @@ mod tests {
             let state = case.state;
             let mut j_out_lhs = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
             let w = get_w();
-            let state_out = state.inverse_j(Some(&mut j_out_lhs));
+            let state_out = state.manif_inverse_j(Some(&mut j_out_lhs));
             let state_pert = state.plus(w.clone()).inverse();
             let state_lin = state_out.rplus(j_out_lhs * w);
             assert_matrix_eq!(
@@ -390,6 +384,30 @@ mod tests {
         }
     }
     #[test]
+    fn eval_act_jac() {
+        for i in 0..TestData::CASES {
+            let case = TestData::test_case(i);
+            let point = Vector3::<f64>::from_fn(|_i, _| rand::thread_rng().gen_range(-1.0..1.0));
+            let mut j_pout_s = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let mut j_pout_p = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
+            let state = case.state;
+            let pointout = state.act_j(point, Some(&mut j_pout_s), Some(&mut j_pout_p));
+            let w = get_w() * 1e-1;
+            let w_order = 1e-4;
+            let w_point =
+                Vector3::<f64>::from_fn(|_i, _| rand::thread_rng().gen_range(-1.0..1.0) * w_order);
+
+            let point_pert = state.plus(w).act(point);
+            let point_lin = pointout + j_pout_s * w;
+            let tol = 1e-6;
+            assert_matrix_eq!(point_pert, point_lin, comp = abs, tol = tol);
+
+            let point_pert = state.act(point + w_point);
+            let point_lin = pointout + j_pout_p * w_point;
+            assert_matrix_eq!(point_pert, point_lin, comp = abs, tol = MAT_NEAR_TOL);
+        }
+    }
+    #[test]
     fn eval_tan_plus_tan_jac() {
         for i in 0..TestData::CASES {
             let case = TestData::test_case(i);
@@ -402,11 +420,11 @@ mod tests {
 
             let delta_pert = (delta + w).plus(delta_other);
             let delta_lin = delta_out.plus(j_out_lhs * w);
-            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MANIF_NEAR_TOL);
 
             let delta_pert = delta.plus(delta_other + w);
             let delta_lin = delta_out.plus(j_out_rhs * w);
-            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MAT_NEAR_TOL);
+            assert_matrix_eq!(delta_pert, delta_lin, comp = abs, tol = MANIF_NEAR_TOL);
         }
     }
     #[test]

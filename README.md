@@ -16,14 +16,14 @@ Unofficial partial port of [manif]
 | Operation  |       | Code |
 | :---       |   :---:   | :---: |
 |       |   Base Operation   |  |
-| Inverse | $\mathbf\Phi^{-1}$ | `X.inverse()` |
+| Inverse | $\mathbf\Phi^{-1}$ | `X.manif_inverse()` |
 | Composition | $\mathbf{\mathcal{X}}\circ\mathbf{\mathcal{Y}}$ | `X * Y`<br/>`X.compose(Y)` |
 | Hat | $\varphi^\wedge$ | `w.hat()` |
 | Act on vector | $\mathbf{\mathcal{X}}\circ\mathbf v$ | `X.act(v)` |
-| Retract to group element | $\exp(\mathbf\varphi^\wedge)$ | `w.exp()` |
-| Lift to tangent space | $\log(\mathbf{\mathcal{X}})^\vee$ | `X.log()` |
+| Retract to group element | $\exp(\mathbf\varphi^\wedge)$ | `w.exp_map()` |
+| Lift to tangent space | $\log(\mathbf{\mathcal{X}})^\vee$ | `X.log_map()` |
 | Manifold Adjoint | $\text{Adj}(\mathbf{\mathcal{X}})$ | `X.adj()` |
-| Tangent adjoint | $\text{adj}(\mathbf{\varphi^\wedge})$ | `w.smallAdj()` |
+| Tangent adjoint | $\text{adj}(\mathbf{\varphi^\wedge})$ | `w.small_adj()` |
 |       |   Composed Operation   |  |
 | Manifold right plus | $\mathbf{\mathcal{X}}\oplus\mathbf\varphi = \mathbf{\mathcal{X}}\circ\exp(\mathbf\varphi^\wedge)$ | `X + w`<br/>`X.plus(w)`<br/>`X.rplus(w)` |
 | Manifold left plus | $\mathbf{\mathbf\varphi\oplus\mathcal{X}} = \exp(\mathbf\varphi^\wedge)\circ\mathbf{\mathcal{X}}$ | `w + X`<br/>`w.plus(X)`<br/>`w.lplus(X)` |

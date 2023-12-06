@@ -1,6 +1,9 @@
-use crate::{tangent_base::TangentBase, MakeIdentity};
+use crate::tangent_base::TangentBase;
 use nalgebra::RealField;
 use std::ops::{Mul, Neg};
+pub trait ManifIdentity<T: RealField> {
+    fn manif_identity() -> Self;
+}
 
 #[allow(non_snake_case)]
 /// Base class for Lie groups.
@@ -17,13 +20,14 @@ pub trait LieGroupBase:
 
     type T: RealField;
     type Jacobian: Clone
-        + MakeIdentity<Self::T>
+        + ManifIdentity<Self::T>
         + From<<Self::Tangent as TangentBase>::Jacobian>
         + Mul
         + Neg
         + From<<Self::Jacobian as Neg>::Output>
         + From<<Self::Jacobian as Mul>::Output>;
     type Tangent: TangentBase + Neg + Clone + From<<Self::Tangent as Neg>::Output>;
+    type Point: Sized;
     /// Computes the inverse of the Lie group object `self`.
     ///
     /// **Optional Argument**
@@ -39,7 +43,10 @@ pub trait LieGroupBase:
     /// This function implements Eq. (3).
     ///
     /// See also: [Eq. (3)](link-to-equation-3), [TangentBase](link-to-tangentbase).
-    fn inverse_j(&self, J_minv_m: Option<&mut Self::Jacobian>) -> Self;
+    fn manif_inverse_j(&self, J_minv_m: Option<&mut Self::Jacobian>) -> Self;
+    fn manif_inverse(&self) -> Self {
+        self.manif_inverse_j(None)
+    }
     /// Computes the corresponding Lie algebra element in vector form.
     ///
     /// Optionally takes a `J_t_m` parameter to store the Jacobian of the tangent with respect to this
@@ -84,6 +91,25 @@ pub trait LieGroupBase:
     ) -> Self;
     fn compose(&self, m: Self) -> Self {
         self.compose_j(m, None, None)
+    }
+    /// Performs the action of the Lie group object on a point.
+    ///
+    /// **Optional Arguments**
+    ///
+    /// * `J_vout_m`: A parameter to store the Jacobian of the new object with respect to `self`.
+    /// * `J_vout_v`: A parameter to store the Jacobian of the new object with respect to `v`.
+    ///
+    /// **Returns**
+    ///
+    /// A point acted upon by the object.
+    fn act_j(
+        &self,
+        v: Self::Point,
+        J_vout_m: Option<&mut Self::Jacobian>,
+        J_vout_v: Option<&mut Self::Jacobian>,
+    ) -> Self::Point;
+    fn act(&self, v: Self::Point) -> Self::Point {
+        self.act_j(v, None, None)
     }
     /// Computes the Adjoint of the Lie group element `self`.
     ///
@@ -155,11 +181,11 @@ pub trait LieGroupBase:
     ) -> Self {
         if let Some(J_mout_t) = J_mout_t {
             J_mout_t.clone_from(
-                &((self.inverse_j(None).adj() * Self::Jacobian::from(t.rjac())).into()),
+                &((self.manif_inverse_j(None).adj() * Self::Jacobian::from(t.rjac())).into()),
             );
         }
         if let Some(J_mout_m) = J_mout_m {
-            J_mout_m.clone_from(&(Self::Jacobian::make_identity()));
+            J_mout_m.clone_from(&(Self::Jacobian::manif_identity()));
         }
         Self::from(t.exp_map()).compose(self.clone())
     }
@@ -207,7 +233,7 @@ pub trait LieGroupBase:
         J_t_ma: Option<&mut Self::Jacobian>,
         J_t_mb: Option<&mut Self::Jacobian>,
     ) -> Self::Tangent {
-        let t = m.inverse_j(None).compose(self.clone()).log_map();
+        let t = m.manif_inverse_j(None).compose(self.clone()).log_map();
         if let Some(J_t_ma) = J_t_ma {
             J_t_ma.clone_from(&(Self::Jacobian::from(t.rjacinv())));
         }
@@ -249,7 +275,7 @@ pub trait LieGroupBase:
         J_t_ma: Option<&mut Self::Jacobian>,
         J_t_mb: Option<&mut Self::Jacobian>,
     ) -> Self::Tangent {
-        let t = self.compose(m.inverse_j(None)).log_map();
+        let t = self.compose(m.manif_inverse_j(None)).log_map();
         if let Some(J_t_ma) = J_t_ma {
             J_t_ma.clone_from(&(Self::Jacobian::from(Self::Jacobian::from(t.rjacinv()) * m.adj())));
         }
@@ -304,7 +330,16 @@ pub trait LieGroupBase:
         m: Self,
         J_mc_ma: Option<&mut Self::Jacobian>,
         J_mc_mb: Option<&mut Self::Jacobian>,
-    ) -> Self;
+    ) -> Self {
+        let mc = self.manif_inverse().compose(m.clone());
+        if let Some(J_mc_ma) = J_mc_ma {
+            J_mc_ma.clone_from(&(Self::Jacobian::from(-m.clone().manif_inverse().adj())));
+        }
+        if let Some(J_mc_mb) = J_mc_mb {
+            J_mc_mb.clone_from(&(Self::Jacobian::manif_identity()));
+        }
+        mc
+    }
     fn between(&self, m: Self) -> Self {
         self.between_j(m, None, None)
     }

@@ -1,4 +1,4 @@
-use crate::{lie_group_base::LieGroupBase, MakeIdentity};
+use crate::lie_group_base::{LieGroupBase, ManifIdentity};
 use nalgebra::RealField;
 use std::ops::{Add, Neg, Sub};
 
@@ -13,7 +13,7 @@ pub trait TangentBase:
 {
     type T: RealField;
     type LieGroup: LieGroupBase;
-    type Jacobian: MakeIdentity<Self::T> + Clone + Neg + From<<Self::Jacobian as Neg>::Output>;
+    type Jacobian: ManifIdentity<Self::T> + Clone + Neg + From<<Self::Jacobian as Neg>::Output>;
     type LieAlg;
     /// Computes the hat operator of the tangent element `self`.
     ///
@@ -99,10 +99,10 @@ pub trait TangentBase:
         J_mout_tb: Option<&mut Self::Jacobian>,
     ) -> Self {
         if let Some(J_mout_ta) = J_mout_ta {
-            J_mout_ta.clone_from(&(Self::Jacobian::make_identity()))
+            J_mout_ta.clone_from(&(Self::Jacobian::manif_identity()))
         }
         if let Some(J_mout_tb) = J_mout_tb {
-            J_mout_tb.clone_from(&(Self::Jacobian::make_identity()))
+            J_mout_tb.clone_from(&(Self::Jacobian::manif_identity()))
         }
         self.clone() + t
     }
@@ -117,10 +117,10 @@ pub trait TangentBase:
         J_mout_tb: Option<&mut Self::Jacobian>,
     ) -> Self {
         if let Some(J_mout_ta) = J_mout_ta {
-            J_mout_ta.clone_from(&(Self::Jacobian::make_identity()))
+            J_mout_ta.clone_from(&(Self::Jacobian::manif_identity()))
         }
         if let Some(J_mout_tb) = J_mout_tb {
-            J_mout_tb.clone_from(&(Self::Jacobian::from(-Self::Jacobian::make_identity())))
+            J_mout_tb.clone_from(&(Self::Jacobian::from(-Self::Jacobian::manif_identity())))
         }
         self.clone() - t
     }

@@ -5,10 +5,11 @@ use nalgebra::{
 };
 use nalgebra::{Const, Vector3};
 
-pub use crate::{lie_group_base::LieGroupBase, tangent_base::TangentBase, MakeIdentity};
+use crate::lie_group_base::ManifIdentity;
+pub use crate::{lie_group_base::LieGroupBase, tangent_base::TangentBase};
 
-impl<T: RealField> MakeIdentity<T> for Matrix<T, Const<3>, Const<3>, ArrayStorage<T, 3, 3>> {
-    fn make_identity() -> Self {
+impl<T: RealField> ManifIdentity<T> for Matrix<T, Const<3>, Const<3>, ArrayStorage<T, 3, 3>> {
+    fn manif_identity() -> Self {
         Self::identity()
     }
 }
@@ -23,6 +24,7 @@ impl<T: RealField> LieGroupBase for UnitQuaternion<T> {
     type T = T;
     type Jacobian = Matrix<T, Const<3>, Const<3>, ArrayStorage<T, 3, 3>>;
     type Tangent = Vector3<T>;
+    type Point = Vector3<T>;
 
     fn log_map_j(&self, J_t_m: Option<&mut Self::Jacobian>) -> Self::Tangent {
         let sin_angle_squared = self.vector().norm_squared();
@@ -73,7 +75,7 @@ impl<T: RealField> LieGroupBase for UnitQuaternion<T> {
         }
         self * m
     }
-    fn inverse_j(&self, J_minv_m: Option<&mut Self::Jacobian>) -> Self {
+    fn manif_inverse_j(&self, J_minv_m: Option<&mut Self::Jacobian>) -> Self {
         if let Some(J_minv_m) = J_minv_m {
             J_minv_m.clone_from(&(-self.clone().to_rotation_matrix().matrix()));
         }
@@ -84,20 +86,21 @@ impl<T: RealField> LieGroupBase for UnitQuaternion<T> {
         self.clone().to_rotation_matrix().matrix().clone()
     }
 
-    fn between_j(
+    fn act_j(
         &self,
-        m: Self,
-        J_mc_ma: Option<&mut Self::Jacobian>,
-        J_mc_mb: Option<&mut Self::Jacobian>,
-    ) -> Self {
-        let mc = self.inverse().compose(m.clone());
-        if let Some(J_mc_ma) = J_mc_ma {
-            J_mc_ma.clone_from(&(-m.clone().inverse().adj()));
+        v: Self::Point,
+        J_vout_m: Option<&mut Self::Jacobian>,
+        J_vout_v: Option<&mut Self::Jacobian>,
+    ) -> Self::Point {
+        let R = self.clone().to_rotation_matrix();
+        let R = R.matrix();
+        if let Some(J_vout_m) = J_vout_m {
+            J_vout_m.copy_from(&(-R * v.hat()));
         }
-        if let Some(J_mc_mb) = J_mc_mb {
-            J_mc_mb.clone_from(&(Self::Jacobian::make_identity()));
+        if let Some(J_vout_v) = J_vout_v {
+            J_vout_v.copy_from(&R);
         }
-        mc
+        R * v
     }
 }
 
@@ -210,6 +213,34 @@ mod tests {
         assert_eq!(0.0, w[(2, 2)]);
     }
     #[test]
+    fn so3_act() {
+        let so3 = UnitQuaternion::identity();
+        let transformed_point = so3.act(Vector3::new(1.0, 1.0, 1.0));
+
+        assert_matrix_eq!(
+            Vector3::new(1.0, 1.0, 1.0),
+            transformed_point,
+            comp = abs,
+            tol = 1e-15
+        );
+        let so3 = UnitQuaternion::from_euler_angles(f64::pi(), f64::pi() / 2.0, f64::pi() / 4.0);
+        let transformed_point = so3.act(Vector3::new(1.0, 1.0, 1.0));
+        assert_matrix_eq!(
+            Vector3::new(0.0, -1.414213562373, -1.0),
+            transformed_point,
+            comp = abs,
+            tol = 1e-12
+        );
+        let so3 = UnitQuaternion::from_euler_angles(f64::pi() / 4.0, -f64::pi() / 2.0, -f64::pi());
+        let transformed_point = so3.act(Vector3::new(1.0, 1.0, 1.0));
+        assert_matrix_eq!(
+            Vector3::new(1.414213562373, 0.0, 1.0),
+            transformed_point,
+            comp = abs,
+            tol = 1e-12
+        );
+    }
+    #[test]
     fn so3_exp() {
         let so3t = Vector3::<f64>::zeros();
         let so3 = so3t.exp_map();
@@ -242,7 +273,7 @@ mod tests {
     fn so3_inv_jac() {
         let so3 = UnitQuaternion::<f64>::identity();
         let mut j_inv = <UnitQuaternion<f64> as LieGroupBase>::Jacobian::zeros();
-        let so3_inv = so3.inverse_j(Some(&mut j_inv));
+        let so3_inv = so3.manif_inverse_j(Some(&mut j_inv));
         assert_eq!(so3_inv.i, 0.0);
         assert_eq!(so3_inv.j, 0.0);
         assert_eq!(so3_inv.k, 0.0);
@@ -262,7 +293,7 @@ mod tests {
         let so3 = UnitQuaternion::from_quaternion(Quaternion::<f64>::from_vector(
             Vector4::<f64>::from_fn(|_, _| rand::thread_rng().gen_range(-1.0..1.0)),
         ));
-        let so3_inv = so3.inverse_j(Some(&mut j_inv));
+        let so3_inv = so3.manif_inverse_j(Some(&mut j_inv));
         assert_eq!(-so3.i, so3_inv.i);
         assert_eq!(-so3.j, so3_inv.j);
         assert_eq!(-so3.k, so3_inv.k);
