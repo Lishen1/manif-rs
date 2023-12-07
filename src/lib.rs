@@ -1,4 +1,5 @@
 pub mod lie_group_base;
+pub mod se2;
 pub mod so3;
 pub mod tangent_base;
 pub use lie_group_base::LieGroupBase;
